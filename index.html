@@ -1,0 +1,2782 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P2P 房间 - 聊天 · 德州扑克 · 文件传输</title>
+<style>
+  :root {
+    --bg-primary: #0a0e1a;
+    --bg-secondary: #111827;
+    --bg-tertiary: #1f2937;
+    --bg-card: rgba(31, 41, 55, 0.6);
+    --bg-glass: rgba(17, 24, 39, 0.7);
+    --border: rgba(99, 102, 241, 0.2);
+    --border-light: rgba(156, 163, 175, 0.15);
+    --text-primary: #f9fafb;
+    --text-secondary: #9ca3af;
+    --text-muted: #6b7280;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
+    --accent-light: rgba(99, 102, 241, 0.15);
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --info: #3b82f6;
+    --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+    --gradient-success: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    --gradient-card: linear-gradient(145deg, rgba(31,41,55,0.8) 0%, rgba(17,24,39,0.9) 100%);
+    --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.15);
+    --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.12) 0%, transparent 50%),
+      radial-gradient(circle at 50% 50%, rgba(236, 72, 153, 0.08) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+    animation: bgFloat 20s ease-in-out infinite;
+  }
+
+  @keyframes bgFloat {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    33% { transform: translate(-2%, -1%) rotate(0.5deg); }
+    66% { transform: translate(1%, 2%) rotate(-0.5deg); }
+  }
+
+  #app {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ==================== 顶部栏 ==================== */
+  .topbar {
+    flex-shrink: 0;
+    height: 56px;
+    padding: 0 24px;
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 10;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 17px;
+    font-weight: 700;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--gradient-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  }
+
+  .logo-text {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .user-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: 20px;
+    font-size: 13px;
+  }
+
+  .avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--gradient-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    position: relative;
+  }
+
+  .status-dot.online { background: var(--success); box-shadow: 0 0 8px var(--success); }
+  .status-dot.connecting { background: var(--warning); animation: pulse 1.5s infinite; }
+  .status-dot.error { background: var(--danger); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ==================== 标签导航 ==================== */
+  .tabs {
+    flex-shrink: 0;
+    padding: 12px 24px 0;
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid var(--border-light);
+    background: rgba(10, 14, 26, 0.3);
+  }
+
+  .tab {
+    padding: 10px 20px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .tab:hover { color: var(--text-primary); background: var(--accent-light); }
+
+  .tab.active {
+    color: var(--accent);
+    background: var(--bg-secondary);
+  }
+
+  .tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 20%;
+    right: 20%;
+    height: 2px;
+    background: var(--gradient-primary);
+    border-radius: 2px 2px 0 0;
+  }
+
+  .tab-icon { font-size: 16px; }
+
+  /* ==================== 主内容区 ==================== */
+  .main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .sidebar {
+    flex-shrink: 0;
+    width: 280px;
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .sidebar-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .peer-list {
+    flex: 1;
+    padding: 8px;
+    overflow-y: auto;
+  }
+
+  .peer-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    margin-bottom: 6px;
+    transition: all 0.2s;
+  }
+
+  .peer-item:hover {
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+
+  .peer-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .peer-info { flex: 1; min-width: 0; }
+  .peer-name { font-size: 13px; font-weight: 500; }
+  .peer-status { font-size: 11px; color: var(--success); }
+
+  .content-area {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .panel {
+    width: 100%;
+    height: 100%;
+    display: none;
+    flex-direction: column;
+  }
+
+  .panel.active { display: flex; }
+
+  /* ==================== 连接面板 ==================== */
+  .connect-panel {
+    padding: 20px 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .connect-container {
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .hero {
+    text-align: center;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+  }
+
+  .hero h1 {
+    font-size: 28px;
+    font-weight: 800;
+    margin-bottom: 8px;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .hero p {
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+
+  .card {
+    background: var(--gradient-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    box-shadow: var(--shadow-card);
+    margin-bottom: 12px;
+    box-sizing: border-box;
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: var(--accent-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .input-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .input-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    min-width: 80px;
+  }
+
+  input[type="text"], textarea {
+    flex: 1;
+    padding: 10px 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+    transition: all 0.2s;
+    min-width: 0;
+  }
+
+  input[type="text"]:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 72px;
+    max-height: 180px;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    word-break: break-all;
+    white-space: pre-wrap;
+    overflow-y: auto;
+  }
+
+  .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    white-space: nowrap;
+    font-family: inherit;
+  }
+
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .btn-primary {
+    background: var(--gradient-primary);
+    color: white;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  }
+
+  .btn-primary:hover { box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4); }
+
+  .btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-light);
+  }
+
+  .btn-secondary:hover {
+    background: var(--accent-light);
+    border-color: var(--accent);
+  }
+
+  .btn-success {
+    background: var(--gradient-success);
+    color: white;
+  }
+
+  .btn-danger {
+    background: var(--danger);
+    color: white;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-light);
+  }
+
+  .btn-ghost:hover {
+    background: var(--accent-light);
+    color: var(--text-primary);
+    border-color: var(--accent);
+  }
+
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .btn-lg { padding: 14px 28px; font-size: 15px; }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    padding: 12px;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: var(--radius-md);
+    margin-top: 12px;
+  }
+
+  .hint-icon { color: var(--info); margin-right: 6px; }
+
+  .status-message {
+    text-align: center;
+    padding: 16px;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+  }
+
+  .status-message.success {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: var(--success);
+  }
+
+  .status-message.error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--danger);
+  }
+
+  .status-message.info {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: var(--info);
+  }
+
+  .step-indicator {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+    justify-content: center;
+  }
+
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 6px 12px;
+    border-radius: 16px;
+    border: 1px solid var(--border-light);
+    background: var(--bg-card);
+    transition: all 0.2s;
+  }
+
+  .step.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+
+  .step.done {
+    color: var(--success);
+    border-color: var(--success);
+    background: rgba(16, 185, 129, 0.1);
+  }
+
+  .step-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .step.active .step-num { background: var(--accent); color: white; }
+  .step.done .step-num { background: var(--success); color: white; }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-light);
+  }
+
+  /* ==================== 聊天面板 ==================== */
+  .chat-panel {
+    height: 100%;
+  }
+
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+  }
+
+  .message {
+    max-width: 65%;
+    align-self: flex-start;
+    animation: messageIn 0.3s ease-out;
+  }
+
+  @keyframes messageIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .message.own { align-self: flex-end; }
+
+  .message-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .message.own .message-header { justify-content: flex-end; }
+
+  .message-bubble {
+    padding: 10px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: 4px 16px 16px 16px;
+    word-break: break-word;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .message.own .message-bubble {
+    background: var(--gradient-primary);
+    color: white;
+    border: none;
+    border-radius: 16px 4px 16px 16px;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  }
+
+  .message.system {
+    max-width: 100%;
+    align-self: center;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 6px 16px;
+    background: transparent;
+  }
+
+  .message.system .message-bubble {
+    background: rgba(107, 114, 128, 0.1);
+    border: 1px solid var(--border-light);
+    border-radius: 16px;
+    padding: 6px 14px;
+    display: inline-block;
+  }
+
+  .message-time { font-size: 10px; }
+
+  .chat-input-bar {
+    flex-shrink: 0;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-light);
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+  }
+
+  .chat-input {
+    flex: 1;
+    padding: 12px 16px;
+    max-height: 120px;
+    min-height: 44px;
+    overflow-y: auto;
+  }
+
+  /* ==================== 文件传输 ==================== */
+  .file-panel {
+    padding: 16px;
+    overflow-y: auto;
+    align-items: stretch;
+  }
+
+  .file-container {
+    max-width: 760px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 32px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: var(--bg-card);
+    margin-bottom: 16px;
+  }
+
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+
+  .drop-zone-icon {
+    font-size: 36px;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .drop-zone-text {
+    font-size: 14px;
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .drop-zone-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .file-list {
+    margin-top: 8px;
+  }
+
+  .file-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    margin-bottom: 8px;
+    transition: all 0.2s;
+  }
+
+  .file-item:hover { border-color: var(--accent); }
+
+  .file-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-light);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .file-info { flex: 1; min-width: 0; }
+  .file-name {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .file-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .progress-bar {
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--gradient-primary);
+    border-radius: 3px;
+    transition: width 0.2s;
+  }
+
+  .file-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .speed-indicator {
+    color: var(--success);
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  /* ==================== 德州扑克面板 ==================== */
+  .poker-panel {
+    padding: 12px;
+    overflow-y: auto;
+    background: radial-gradient(ellipse at center, #1a3a2a 0%, #0f1f18 100%);
+  }
+
+  .poker-table {
+    max-width: 780px;
+    width: 100%;
+    margin: 0 auto;
+    background: linear-gradient(145deg, #1e5631 0%, #0d3a1f 100%);
+    border: 6px solid #2d1810;
+    border-radius: 20px;
+    box-shadow:
+      inset 0 0 80px rgba(0,0,0,0.4),
+      0 12px 40px rgba(0,0,0,0.5);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* 对手区 */
+  .seat-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .seat-row.opponent { justify-content: flex-end; }
+  .seat-row.me { justify-content: flex-start; }
+
+  .player-seat {
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(17, 24, 39, 0.85);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    transition: all 0.3s;
+  }
+
+  .seat-row.opponent .player-seat { flex-direction: row-reverse; }
+
+  .player-seat.active {
+    border-color: var(--warning);
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+  }
+
+  .player-seat.folded {
+    opacity: 0.5;
+    filter: grayscale(0.7);
+  }
+
+  .player-seat.winner {
+    border-color: var(--warning);
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.6);
+    animation: winnerGlow 1.2s ease-in-out infinite alternate;
+  }
+
+  @keyframes winnerGlow {
+    from { box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
+    to { box-shadow: 0 0 30px rgba(245, 158, 11, 0.8); }
+  }
+
+  .seat-info {
+    flex: 1;
+    text-align: left;
+    min-width: 0;
+  }
+
+  .seat-row.opponent .seat-info { text-align: right; }
+
+  .seat-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .seat-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .seat-chips {
+    font-size: 12px;
+    color: #ffd700;
+    font-weight: 700;
+    margin-top: 2px;
+  }
+
+  .seat-bet {
+    font-size: 11px;
+    color: #cbd5e1;
+    margin-top: 2px;
+  }
+
+  .seat-cards {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  /* 中央区 */
+  .poker-center {
+    text-align: center;
+    padding: 14px 10px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .pot-display {
+    font-size: 11px;
+    color: #ffd700;
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .pot-amount {
+    font-size: 22px;
+    color: white;
+    font-weight: 800;
+    margin-bottom: 12px;
+  }
+
+  .community-cards {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    min-height: 64px;
+    flex-wrap: wrap;
+  }
+
+  .card-poker {
+    width: 44px;
+    height: 62px;
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    position: relative;
+    animation: cardDeal 0.3s ease-out;
+    flex-shrink: 0;
+  }
+
+  .card-poker.hidden-card {
+    background: linear-gradient(135deg, #4a1d6f 0%, #1a0d3f 100%);
+    color: transparent;
+    border: 2px solid #6366f1;
+  }
+
+  .card-poker.hidden-card::before {
+    content: '✦';
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 20px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  @keyframes cardDeal {
+    from { transform: translateY(-20px) rotate(-10deg); opacity: 0; }
+    to { transform: translateY(0) rotate(0); opacity: 1; }
+  }
+
+  .card-poker.red { color: #dc2626; }
+  .card-poker.black { color: #1f2937; }
+  .card-poker .card-rank { font-size: 14px; line-height: 1; }
+  .card-poker .card-suit { font-size: 16px; line-height: 1; margin-top: 2px; }
+
+  .seat-cards .card-poker {
+    width: 36px;
+    height: 50px;
+  }
+
+  .seat-cards .card-poker .card-rank { font-size: 12px; }
+  .seat-cards .card-poker .card-suit { font-size: 14px; }
+
+  .poker-controls {
+    max-width: 780px;
+    width: 100%;
+    margin: 12px auto 0;
+    padding: 12px;
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .poker-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: auto;
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .info-chip {
+    padding: 6px 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+  }
+
+  .info-chip .label {
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    margin-right: 4px;
+  }
+
+  .info-chip .value {
+    color: var(--text-primary);
+    font-weight: 700;
+  }
+
+  .bet-input {
+    width: 90px !important;
+    text-align: center;
+    font-weight: 700;
+  }
+
+  .poker-status {
+    max-width: 780px;
+    width: 100%;
+    margin: 0 auto 12px;
+    padding: 10px 16px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .poker-status.turn { color: var(--warning); }
+  .poker-status.win { color: var(--success); font-weight: 700; font-size: 14px; }
+
+  /* ==================== Toast 通知 ==================== */
+  .toast-container {
+    position: fixed;
+    top: 80px;
+    right: 24px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+  }
+
+  .toast {
+    padding: 12px 20px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    font-size: 13px;
+    animation: toastIn 0.3s ease-out;
+    pointer-events: auto;
+    max-width: 320px;
+  }
+
+  .toast.success { border-left-color: var(--success); }
+  .toast.error { border-left-color: var(--danger); }
+  .toast.warning { border-left-color: var(--warning); }
+  .toast.info { border-left-color: var(--info); }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes toastOut {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(20px); }
+  }
+
+  .toast.hiding { animation: toastOut 0.3s ease-out forwards; }
+
+  /* ==================== 滚动条美化 ==================== */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-light);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+  /* ==================== 响应式 ==================== */
+  @media (max-width: 900px) {
+    .sidebar { width: 220px; }
+    .hero h1 { font-size: 28px; }
+    .connect-panel, .file-panel { padding: 20px; }
+    .poker-table { aspect-ratio: 4 / 3; padding: 20px; }
+    .card-poker { width: 44px; height: 64px; }
+    .card-poker .card-rank { font-size: 14px; }
+    .card-poker .card-suit { font-size: 16px; }
+    .player-seat { width: 110px; font-size: 11px; }
+    .seat-cards .card-poker { width: 24px; height: 34px; }
+    .seat-cards .card-poker .card-rank { font-size: 9px; }
+    .seat-cards .card-poker .card-suit { font-size: 10px; }
+  }
+
+  @media (max-width: 640px) {
+    .sidebar { display: none; }
+    .topbar { padding: 0 12px; }
+    .tabs { padding: 8px 12px 0; }
+    .tab { padding: 8px 12px; font-size: 13px; }
+    .message { max-width: 85%; }
+  }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 40px;
+  }
+
+  .empty-state-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+  }
+
+  .empty-state-text {
+    font-size: 15px;
+    max-width: 400px;
+    line-height: 1.7;
+  }
+
+  .empty-state-text strong {
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- 顶部栏 -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-icon">✦</div>
+      <div class="logo-text">P2P 房间</div>
+    </div>
+    <div class="user-info">
+      <div class="user-chip">
+        <div class="avatar" id="myAvatar">我</div>
+        <input type="text" id="myName" placeholder="输入昵称" style="width:120px; padding:4px 8px; background:transparent; border:none; font-size:13px;">
+      </div>
+      <div class="user-chip">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">未连接</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 标签导航 -->
+  <div class="tabs">
+    <button class="tab active" data-panel="connect">
+      <span class="tab-icon">🔗</span>
+      <span>连接</span>
+    </button>
+    <button class="tab" data-panel="chat">
+      <span class="tab-icon">💬</span>
+      <span>聊天</span>
+    </button>
+    <button class="tab" data-panel="file">
+      <span class="tab-icon">📁</span>
+      <span>文件</span>
+    </button>
+    <button class="tab" data-panel="poker">
+      <span class="tab-icon">🃏</span>
+      <span>德州扑克</span>
+    </button>
+  </div>
+
+  <!-- 主内容区 -->
+  <div class="main">
+
+    <!-- 侧边栏: 在线用户 -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title">在线用户</div>
+      </div>
+      <div class="peer-list" id="peerList">
+        <div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px;">
+          连接后显示在线用户
+        </div>
+      </div>
+    </div>
+
+    <!-- 内容区 -->
+    <div class="content-area">
+
+      <!-- 连接面板 -->
+      <div class="panel connect-panel active" id="panel-connect">
+        <div class="connect-container">
+          <div class="hero">
+            <h1>点对点房间</h1>
+            <p>聊天 · 德州扑克 · 高速文件传输 · 无需服务器</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span class="card-title-icon">1</span>
+              <span>设置你的昵称</span>
+            </div>
+            <div class="input-group">
+              <span class="input-label">昵称</span>
+              <input type="text" id="nameInput" placeholder="例如: 小明" maxlength="20">
+              <button class="btn btn-secondary" onclick="saveName()">保存</button>
+            </div>
+            <div class="hint">
+              <span class="hint-icon">💡</span>
+              昵称会保存到本地浏览器, 下次访问自动加载。
+            </div>
+          </div>
+
+          <div class="divider">建立 P2P 连接</div>
+
+          <div class="step-indicator">
+            <div class="step" id="step1">
+              <div class="step-num">1</div>
+              <span>创建 Offer</span>
+            </div>
+            <div class="step" id="step2">
+              <div class="step-num">2</div>
+              <span>交换信令</span>
+            </div>
+            <div class="step" id="step3">
+              <div class="step-num">3</div>
+              <span>连接成功</span>
+            </div>
+          </div>
+
+          <!-- 主机方: 创建房间 -->
+          <div class="card" id="hostCard">
+            <div class="card-title">
+              <span class="card-title-icon">🏠</span>
+              <span>创建房间 (发送连接请求给对方)</span>
+            </div>
+            <div class="btn-row" style="margin-bottom: 12px;">
+              <button class="btn btn-primary btn-lg" onclick="createOffer()">
+                <span>✨</span>
+                <span>生成连接邀请 (Offer)</span>
+              </button>
+            </div>
+            <div id="offerOutput" style="display:none;">
+              <div style="font-size:13px; color:var(--text-secondary); margin-bottom:8px;">
+                1. 将下面的邀请码复制发送给对方 (通过微信/邮件/聊天工具等)
+              </div>
+              <textarea id="offerText" readonly onclick="this.select()"></textarea>
+              <div class="btn-row" style="margin-top:10px;">
+                <button class="btn btn-secondary" onclick="copyText('offerText')">📋 复制邀请码</button>
+              </div>
+
+              <div style="font-size:13px; color:var(--text-secondary); margin:16px 0 8px;">
+                2. 收到对方的回复码 (Answer) 后, 粘贴到下方:
+              </div>
+              <textarea id="answerInput" placeholder="粘贴对方的 Answer 信令到这里..."></textarea>
+              <div class="btn-row" style="margin-top:10px;">
+                <button class="btn btn-success" onclick="submitAnswer()">
+                  <span>✓</span>
+                  <span>确认连接</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="divider">或</div>
+
+          <!-- 访客方: 加入房间 -->
+          <div class="card" id="guestCard">
+            <div class="card-title">
+              <span class="card-title-icon">🚪</span>
+              <span>加入房间 (接收对方邀请)</span>
+            </div>
+            <div style="font-size:13px; color:var(--text-secondary); margin-bottom:8px;">
+              1. 粘贴对方发来的邀请码 (Offer):
+            </div>
+            <textarea id="offerInput" placeholder="粘贴邀请码..."></textarea>
+
+            <div id="answerOutput" style="display:none;">
+              <div style="font-size:13px; color:var(--text-secondary); margin:16px 0 8px;">
+                2. 将下面的回复码发送回对方:
+              </div>
+              <textarea id="answerText" readonly onclick="this.select()"></textarea>
+              <div class="btn-row" style="margin-top:10px;">
+                <button class="btn btn-secondary" onclick="copyText('answerText')">📋 复制回复码</button>
+              </div>
+              <div class="status-message info" style="margin-top:12px;">
+                等待对方确认后, 连接会自动建立...
+              </div>
+            </div>
+
+            <div class="btn-row" style="margin-top:12px;">
+              <button class="btn btn-primary btn-lg" onclick="acceptOffer()">
+                <span>🔗</span>
+                <span>接受邀请并生成回复码</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="hint">
+            <span class="hint-icon">🌐</span>
+            <strong>局域网使用:</strong> 两台设备连接同一 WiFi/有线网络, 通过上述方式交换信令后, 可在局域网内自动建立直连, 文件传输速度可达 1000M+ (受限于你的网络设备)。
+            <br><br>
+            <span class="hint-icon">🚀</span>
+            <strong>托管到 GitHub:</strong> 将此 index.html 上传到 GitHub 仓库并开启 Pages 服务, 两个设备同时访问该 URL 即可使用。
+            <br><br>
+            <span class="hint-icon">📋</span>
+            <strong>简化流程:</strong> A 点击"生成连接邀请" → 复制发送给 B → B 粘贴并点击"接受邀请" → B 复制回复码发回给 A → A 粘贴回复码并点击"确认连接"。
+          </div>
+
+          <div id="connectionStatus" style="margin-top:20px;"></div>
+
+          <div class="btn-row" style="justify-content:center; margin-top:20px;">
+            <button class="btn btn-ghost" onclick="disconnect()" id="disconnectBtn" style="display:none;">
+              <span>🔌</span>
+              <span>断开连接</span>
+            </button>
+            <button class="btn btn-ghost" onclick="resetConnection()">
+              <span>🔄</span>
+              <span>重置连接状态</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 聊天面板 -->
+      <div class="panel chat-panel" id="panel-chat">
+        <div class="chat-messages" id="chatMessages">
+          <div class="empty-state" id="chatEmpty">
+            <div class="empty-state-icon">💬</div>
+            <div class="empty-state-text">
+              尚未建立连接。请前往 <strong>连接</strong> 标签页与对方建立 P2P 连接。<br><br>
+              连接后, 这里将显示聊天记录。
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-bar" id="chatInputBar" style="display:none;">
+          <input type="text" class="chat-input" id="chatInput" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)">
+          <button class="btn btn-primary" onclick="sendMessage()">发送</button>
+        </div>
+      </div>
+
+      <!-- 文件传输面板 -->
+      <div class="panel file-panel" id="panel-file">
+        <div class="file-container">
+          <div class="card">
+            <div class="card-title">
+              <span class="card-title-icon">📁</span>
+              <span>高速文件传输</span>
+            </div>
+
+            <div class="drop-zone" id="dropZone">
+              <span class="drop-zone-icon">📤</span>
+              <div class="drop-zone-text">点击选择文件 或 拖拽文件到此处</div>
+              <div class="drop-zone-hint">支持任意类型和大小文件 · 局域网直连速度可达 1000M+</div>
+              <input type="file" id="fileInput" multiple style="display:none;">
+            </div>
+
+            <div id="fileDisconnected" class="hint" style="margin-top:16px;">
+              <span class="hint-icon">⚠️</span>
+              请先在 <strong>连接</strong> 标签页建立 P2P 连接后, 才能传输文件。
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span class="card-title-icon">📋</span>
+              <span>传输记录</span>
+            </div>
+            <div class="file-list" id="fileList">
+              <div style="text-align:center; color:var(--text-muted); padding:30px; font-size:13px;">
+                暂无文件传输记录
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 德州扑克面板 -->
+      <div class="panel poker-panel" id="panel-poker">
+        <div class="poker-status" id="pokerStatus">尚未开始游戏。建立连接后可开始对局。</div>
+
+        <div class="poker-table">
+          <!-- 对手行 (右上) -->
+          <div class="seat-row opponent">
+            <div class="player-seat" id="seat-opponent">
+              <div class="seat-avatar" id="oppAvatar" style="background: linear-gradient(135deg, #ec4899, #8b5cf6);">对</div>
+              <div class="seat-info">
+                <div class="seat-name" id="oppName">对手</div>
+                <div class="seat-chips" id="oppChips">筹码: 1000</div>
+                <div class="seat-bet" id="oppBet">下注: 0</div>
+              </div>
+              <div class="seat-cards" id="oppCards"></div>
+            </div>
+          </div>
+
+          <!-- 中央: 底池 + 公共牌 -->
+          <div class="poker-center">
+            <div class="pot-display">底池 (POT)</div>
+            <div class="pot-amount" id="potAmount">0</div>
+            <div class="community-cards" id="communityCards"></div>
+          </div>
+
+          <!-- 自己行 (左下) -->
+          <div class="seat-row me">
+            <div class="player-seat" id="seat-me">
+              <div class="seat-avatar" id="meAvatar" style="background: var(--gradient-primary);">我</div>
+              <div class="seat-info">
+                <div class="seat-name" id="meName">我</div>
+                <div class="seat-chips" id="meChips">筹码: 1000</div>
+                <div class="seat-bet" id="meBet">下注: 0</div>
+              </div>
+              <div class="seat-cards" id="meCards"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="poker-controls">
+          <div class="poker-info">
+            <div class="info-chip">
+              <span class="label">小盲</span>
+              <span class="value" id="smallBlind">10</span>
+            </div>
+            <div class="info-chip">
+              <span class="label">大盲</span>
+              <span class="value" id="bigBlind">20</span>
+            </div>
+            <div class="info-chip">
+              <span class="label">回合</span>
+              <span class="value" id="roundNum">1</span>
+            </div>
+            <div class="info-chip">
+              <span class="label">牌型</span>
+              <span class="value" id="handRank">-</span>
+            </div>
+          </div>
+
+          <div id="pokerStartBtn" style="display:flex; gap:8px;">
+            <button class="btn btn-success" onclick="startPokerGame()">🎮 开始新一局</button>
+          </div>
+
+          <div id="pokerActionBtns" style="display:none; gap:8px; flex-wrap:wrap; justify-content:center;">
+            <input type="text" class="bet-input" id="betAmount" placeholder="加注额">
+            <button class="btn btn-secondary" onclick="pokerAction('fold')">弃牌</button>
+            <button class="btn btn-secondary" onclick="pokerAction('check')">过牌</button>
+            <button class="btn btn-primary" onclick="pokerAction('call')">跟注</button>
+            <button class="btn btn-primary" onclick="pokerAction('raise')">加注</button>
+            <button class="btn btn-danger" onclick="pokerAction('allin')">全下</button>
+          </div>
+
+          <div id="pokerWaitMsg" style="color: var(--text-secondary); font-size: 13px; display:none; text-align:center; width:100%;">
+            等待对手行动...
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Toast 容器 -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+/* ============================================================
+   P2P 房间 - 聊天 · 德州扑克 · 文件传输
+   使用 WebRTC DataChannel 实现点对点直连
+   使用手动 SDP 复制粘贴作为信令方式 (无需服务器)
+   ============================================================ */
+
+// ==================== 全局状态 ====================
+const state = {
+  myName: localStorage.getItem('p2p_name') || '玩家' + Math.floor(Math.random() * 1000),
+  peerName: '',
+  connected: false,
+  connection: null,       // RTCPeerConnection
+  dataChannel: null,      // RTCDataChannel (主通道)
+  fileChannel: null,      // RTCDataChannel (文件通道)
+  iceCandidates: [],      // 收集的 ICE candidate
+  role: null,             // 'host' or 'guest'
+  // 文件传输状态
+  fileTransfers: {},      // fileId -> transfer state
+  // 扑克状态
+  poker: null,
+};
+
+// ==================== 工具函数 ====================
+function $(id) { return document.getElementById(id); }
+
+function toast(msg, type = 'info', duration = 3000) {
+  const container = $('toastContainer');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('hiding');
+    setTimeout(() => el.remove(), 300);
+  }, duration);
+}
+
+function copyText(elId) {
+  const el = $(elId);
+  el.select();
+  try {
+    document.execCommand('copy');
+    toast('✓ 已复制到剪贴板', 'success', 2000);
+  } catch (e) {
+    toast('复制失败, 请手动复制', 'warning');
+  }
+}
+
+function setStatus(text, stateKey) {
+  $('statusText').textContent = text;
+  const dot = $('statusDot');
+  dot.className = 'status-dot';
+  if (stateKey === 'online') dot.classList.add('online');
+  else if (stateKey === 'connecting') dot.classList.add('connecting');
+  else if (stateKey === 'error') dot.classList.add('error');
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+  return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+}
+
+function formatTime(seconds) {
+  if (!isFinite(seconds) || seconds < 0) return '-';
+  if (seconds < 60) return Math.round(seconds) + 's';
+  return Math.floor(seconds / 60) + 'm ' + Math.round(seconds % 60) + 's';
+}
+
+function getInitials(name) {
+  if (!name) return '?';
+  return name.charAt(0).toUpperCase();
+}
+
+function updatePeerList() {
+  const list = $('peerList');
+  if (!state.connected) {
+    list.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px;">连接后显示在线用户</div>';
+    return;
+  }
+  list.innerHTML = `
+    <div class="peer-item">
+      <div class="peer-avatar" style="background: var(--gradient-primary);">${getInitials(state.myName)}</div>
+      <div class="peer-info">
+        <div class="peer-name">${state.myName} (你)</div>
+        <div class="peer-status">已连接</div>
+      </div>
+    </div>
+    <div class="peer-item">
+      <div class="peer-avatar" style="background: linear-gradient(135deg, #ec4899, #8b5cf6);">${getInitials(state.peerName || '对手')}</div>
+      <div class="peer-info">
+        <div class="peer-name">${state.peerName || '对手'}</div>
+        <div class="peer-status">已连接 · P2P</div>
+      </div>
+    </div>
+  `;
+}
+
+// ==================== 昵称管理 ====================
+function initName() {
+  $('myName').value = state.myName;
+  $('nameInput').value = state.myName;
+  $('myAvatar').textContent = getInitials(state.myName);
+  $('meAvatar').textContent = getInitials(state.myName);
+  $('meName').textContent = state.myName;
+}
+
+function saveName() {
+  const name = $('nameInput').value.trim();
+  if (!name) { toast('昵称不能为空', 'warning'); return; }
+  state.myName = name;
+  localStorage.setItem('p2p_name', name);
+  $('myName').value = name;
+  $('myAvatar').textContent = getInitials(name);
+  $('meAvatar').textContent = getInitials(name);
+  $('meName').textContent = name;
+  updatePeerList();
+  // 同步通知对方
+  if (state.connected && state.dataChannel) {
+    sendJSON({ type: 'name', name: name });
+  }
+  toast('✓ 昵称已保存', 'success', 2000);
+}
+
+$('myName').addEventListener('change', function() {
+  const name = this.value.trim();
+  if (name) {
+    state.myName = name;
+    localStorage.setItem('p2p_name', name);
+    $('nameInput').value = name;
+    $('myAvatar').textContent = getInitials(name);
+    $('meAvatar').textContent = getInitials(name);
+    $('meName').textContent = name;
+    updatePeerList();
+    if (state.connected) sendJSON({ type: 'name', name: name });
+  } else {
+    this.value = state.myName;
+  }
+});
+
+// ==================== 标签切换 ====================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const panelId = tab.dataset.panel;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    $('panel-' + panelId).classList.add('active');
+  });
+});
+
+// ==================== Toast 连接状态 ====================
+function showConnectionStatus(msg, type) {
+  const el = $('connectionStatus');
+  el.innerHTML = `<div class="status-message ${type}">${msg}</div>`;
+}
+
+// ==================== WebRTC 连接核心 ====================
+const RTC_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ]
+};
+
+function createPeerConnection() {
+  try {
+    state.connection = new RTCPeerConnection(RTC_CONFIG);
+  } catch (e) {
+    console.error('创建 RTCPeerConnection 失败:', e);
+    toast('❌ 你的浏览器不支持 WebRTC', 'error', 5000);
+    return false;
+  }
+
+  state.connection.onicecandidate = (e) => {
+    if (e.candidate) {
+      state.iceCandidates.push(e.candidate);
+    } else {
+      // ICE 收集完成, 更新 SDP (包含所有 candidates)
+      const ld = state.connection.localDescription;
+      if (ld) {
+        const sdpObj = { type: ld.type || (state.role === 'host' ? 'offer' : 'answer'), sdp: ld.sdp };
+        const json = JSON.stringify(sdpObj);
+        if (state.role === 'host') $('offerText').value = json;
+        else if (state.role === 'guest') $('answerText').value = json;
+      }
+    }
+  };
+
+  state.connection.onconnectionstatechange = () => {
+    const s = state.connection.connectionState;
+    console.log('连接状态:', s);
+    if (s === 'connected') {
+      onConnected();
+    } else if (s === 'disconnected' || s === 'failed') {
+      onDisconnected();
+    } else if (s === 'connecting') {
+      setStatus('连接中...', 'connecting');
+    }
+  };
+
+  state.connection.ondatachannel = (e) => {
+    const channel = e.channel;
+    console.log('收到 data channel:', channel.label);
+    if (channel.label === 'chat') {
+      setupChatChannel(channel);
+    } else if (channel.label === 'file') {
+      setupFileChannel(channel);
+    } else if (channel.label === 'poker') {
+      setupPokerChannel(channel);
+    }
+  };
+
+  // 创建 data channel (只在 host 端创建, 但实际上两端都可以创建)
+  // 为简单起见, 两端都创建 (label 相同会自动匹配)
+  return true;
+}
+
+async function createOffer() {
+  resetConnection(true);
+  state.role = 'host';
+
+  if (!createPeerConnection()) return;
+
+  // 创建 data channel
+  state.dataChannel = state.connection.createDataChannel('chat');
+  setupChatChannel(state.dataChannel);
+  state.fileChannel = state.connection.createDataChannel('file', { ordered: true });
+  setupFileChannel(state.fileChannel);
+  state.pokerChannel = state.connection.createDataChannel('poker');
+  setupPokerChannel(state.pokerChannel);
+
+  setStatus('正在生成邀请码...', 'connecting');
+  $('step1').classList.add('active');
+
+  try {
+    const offer = await state.connection.createOffer();
+    await state.connection.setLocalDescription(offer);
+    $('offerOutput').style.display = 'block';
+    $('offerText').value = JSON.stringify({ type: 'offer', sdp: offer.sdp });
+    showConnectionStatus('✓ 邀请码已生成, 请复制并发送给对方', 'success');
+    toast('✓ 邀请码已生成', 'success', 3000);
+  } catch (e) {
+    console.error(e);
+    showConnectionStatus('❌ 生成邀请码失败: ' + e.message, 'error');
+  }
+}
+
+async function acceptOffer() {
+  // 先读取用户输入，再重置，避免 resetConnection 清空文本框
+  const offerText = $('offerInput').value.trim();
+  if (!offerText) { toast('请先粘贴对方的邀请码', 'warning'); return; }
+
+  resetConnection(true);
+  state.role = 'guest';
+
+  if (!createPeerConnection()) return;
+
+  // guest 端会通过 ondatachannel 接收通道
+  setStatus('正在接受邀请...', 'connecting');
+  $('step2').classList.add('active');
+
+  try {
+    let offer = JSON.parse(offerText);
+    // 容错: 如果缺少 type 字段则自动推断
+    if (!offer.type) offer.type = 'offer';
+    if (!offer.sdp) { toast('邀请码格式不正确 (缺少 sdp)', 'error'); return; }
+    await state.connection.setRemoteDescription(new RTCSessionDescription({ type: offer.type, sdp: offer.sdp }));
+    const answer = await state.connection.createAnswer();
+    await state.connection.setLocalDescription(answer);
+    $('answerOutput').style.display = 'block';
+    $('answerText').value = JSON.stringify({ type: 'answer', sdp: answer.sdp });
+    showConnectionStatus('✓ 回复码已生成, 请复制并发送回对方', 'success');
+    toast('✓ 回复码已生成', 'success', 3000);
+  } catch (e) {
+    console.error(e);
+    showConnectionStatus('❌ 处理邀请失败: ' + e.message, 'error');
+  }
+}
+
+async function submitAnswer() {
+  const answerText = $('answerInput').value.trim();
+  if (!answerText) { toast('请先粘贴对方的回复码', 'warning'); return; }
+  try {
+    let answer = JSON.parse(answerText);
+    if (!answer.type) answer.type = 'answer';
+    if (!answer.sdp) { toast('回复码格式不正确 (缺少 sdp)', 'error'); return; }
+    await state.connection.setRemoteDescription(new RTCSessionDescription({ type: answer.type, sdp: answer.sdp }));
+    showConnectionStatus('✓ 回复码已确认, 正在建立 P2P 连接...', 'info');
+    setStatus('连接中...', 'connecting');
+    toast('正在建立连接...', 'info', 5000);
+  } catch (e) {
+    console.error(e);
+    showConnectionStatus('❌ 确认失败: ' + e.message, 'error');
+  }
+}
+
+function onConnected() {
+  state.connected = true;
+  setStatus('已连接', 'online');
+  $('step1').classList.remove('active');
+  $('step2').classList.remove('active');
+  $('step3').classList.add('done');
+  $('disconnectBtn').style.display = 'inline-flex';
+  $('chatInputBar').style.display = 'flex';
+  $('fileDisconnected').style.display = 'none';
+  showConnectionStatus('🎉 P2P 连接已成功建立! 可以开始聊天、传文件和玩游戏了', 'success');
+  toast('🎉 P2P 连接成功!', 'success', 4000);
+  // 通知对方我的昵称
+  if (state.dataChannel && state.dataChannel.readyState === 'open') {
+    sendJSON({ type: 'name', name: state.myName });
+  }
+  updatePeerList();
+}
+
+function onDisconnected() {
+  state.connected = false;
+  setStatus('已断开', 'error');
+  $('chatInputBar').style.display = 'none';
+  $('fileDisconnected').style.display = 'block';
+  $('disconnectBtn').style.display = 'none';
+  toast('连接已断开', 'warning');
+  updatePeerList();
+}
+
+function disconnect() {
+  if (state.connection) {
+    try { state.connection.close(); } catch(e){}
+  }
+  resetConnection(false);
+}
+
+function resetConnection(keepName) {
+  if (state.connection) { try { state.connection.close(); } catch(e){} }
+  state.connection = null;
+  state.dataChannel = null;
+  state.fileChannel = null;
+  state.pokerChannel = null;
+  state.connected = false;
+  state.role = null;
+  state.iceCandidates = [];
+  if (!keepName) { /* keep */ }
+  setStatus('未连接', '');
+  $('offerOutput').style.display = 'none';
+  $('answerOutput').style.display = 'none';
+  $('offerText').value = '';
+  $('answerText').value = '';
+  // ↓ 注意：不清理 offerInput / answerInput，保留用户粘贴的内容
+  $('connectionStatus').innerHTML = '';
+  $('step1').classList.remove('active', 'done');
+  $('step2').classList.remove('active', 'done');
+  $('step3').classList.remove('active', 'done');
+  $('chatInputBar').style.display = 'none';
+  $('fileDisconnected').style.display = 'block';
+  $('disconnectBtn').style.display = 'none';
+  updatePeerList();
+}
+
+// ==================== JSON 发送工具 ====================
+function sendJSON(obj, channel) {
+  const ch = channel || state.dataChannel;
+  if (!ch || ch.readyState !== 'open') {
+    console.warn('通道未就绪, 无法发送', obj);
+    return false;
+  }
+  try {
+    ch.send(JSON.stringify(obj));
+    return true;
+  } catch (e) {
+    console.error('发送失败:', e);
+    return false;
+  }
+}
+
+// ==================== 聊天 ====================
+function setupChatChannel(channel) {
+  channel.onopen = () => { console.log('chat channel open'); state.dataChannel = channel;
+    if (state.connected) sendJSON({ type: 'name', name: state.myName });
+  };
+  channel.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      handleChatMessage(msg);
+    } catch(err) {
+      appendMessage({ text: e.data, own: false, time: new Date(), name: state.peerName || '对方' });
+    }
+  };
+  channel.onclose = () => console.log('chat channel closed');
+}
+
+function handleChatMessage(msg) {
+  if (msg.type === 'name') {
+    state.peerName = msg.name;
+    updatePeerList();
+    addSystemMessage('对方的昵称已更新为: ' + msg.name);
+  } else if (msg.type === 'chat') {
+    appendMessage({ text: msg.text, own: false, time: new Date(msg.time), name: msg.name });
+  }
+}
+
+function sendMessage() {
+  const input = $('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  if (!state.connected || !state.dataChannel || state.dataChannel.readyState !== 'open') {
+    toast('尚未建立连接', 'warning');
+    return;
+  }
+  const now = Date.now();
+  appendMessage({ text, own: true, time: new Date(now), name: state.myName });
+  sendJSON({ type: 'chat', text, time: now, name: state.myName });
+  input.value = '';
+}
+
+$('chatInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+function appendMessage({ text, own, time, name }) {
+  const empty = $('chatEmpty');
+  if (empty) empty.remove();
+  const messages = $('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'message' + (own ? ' own' : '');
+  const hh = time.getHours().toString().padStart(2, '0');
+  const mm = time.getMinutes().toString().padStart(2, '0');
+  const safeText = escapeHtml(text);
+  div.innerHTML = `
+    <div class="message-header">
+      <span>${escapeHtml(name)} · ${hh}:${mm}</span>
+    </div>
+    <div class="message-bubble">${safeText}</div>
+  `;
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function addSystemMessage(text) {
+  const empty = $('chatEmpty');
+  if (empty) empty.remove();
+  const messages = $('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'message system';
+  div.innerHTML = `<div class="message-bubble">${escapeHtml(text)}</div>`;
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ==================== 文件传输 ====================
+const FILE_CHUNK_SIZE = 64 * 1024; // 64KB per chunk
+
+function setupFileChannel(channel) {
+  channel.binaryType = 'arraybuffer';
+  channel.onopen = () => { console.log('file channel open'); state.fileChannel = channel; };
+  channel.onmessage = (e) => handleFileMessage(e.data);
+  channel.onclose = () => console.log('file channel closed');
+}
+
+function handleFileMessage(data) {
+  if (typeof data === 'string') {
+    try {
+      const msg = JSON.parse(data);
+      handleFileControl(msg);
+    } catch(e) { console.error(e); }
+  } else {
+    handleFileChunk(data);
+  }
+}
+
+function handleFileControl(msg) {
+  if (msg.type === 'file-start') {
+    state.fileTransfers[msg.fileId] = {
+      name: msg.name,
+      size: msg.size,
+      mimeType: msg.mimeType,
+      received: 0,
+      chunks: [],
+      startTime: Date.now(),
+    };
+    renderFileItem(msg.fileId, 'receiving');
+    toast('📥 开始接收文件: ' + msg.name, 'info', 2000);
+  } else if (msg.type === 'file-done') {
+    const t = state.fileTransfers[msg.fileId];
+    if (t) {
+      const blob = new Blob(t.chunks, { type: t.mimeType });
+      t.url = URL.createObjectURL(blob);
+      t.done = true;
+      updateFileItem(msg.fileId, 'done', { url: t.url });
+      toast('✓ 文件接收完成: ' + t.name, 'success');
+    }
+  }
+}
+
+function handleFileChunk(arrayBuffer) {
+  // 简单的基于顺序的接收: 找到第一个尚未完成的 transfer
+  const ids = Object.keys(state.fileTransfers).filter(id => !state.fileTransfers[id].done && state.fileTransfers[id].received < state.fileTransfers[id].size);
+  if (ids.length === 0) return;
+  const fileId = ids[0];
+  const t = state.fileTransfers[fileId];
+  t.chunks.push(arrayBuffer);
+  t.received += arrayBuffer.byteLength;
+  updateFileItem(fileId, 'receiving', { received: t.received, startTime: t.startTime, total: t.size });
+}
+
+function sendFile(file) {
+  if (!state.connected || !state.fileChannel || state.fileChannel.readyState !== 'open') {
+    toast('尚未建立连接, 无法发送文件', 'warning');
+    return;
+  }
+  const fileId = 'f_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  state.fileTransfers[fileId] = {
+    name: file.name, size: file.size, mimeType: file.type,
+    received: 0, chunks: [], startTime: Date.now(), sending: true,
+  };
+  renderFileItem(fileId, 'sending');
+
+  // 发送开始消息
+  state.fileChannel.send(JSON.stringify({
+    type: 'file-start', fileId, name: file.name, size: file.size, mimeType: file.type,
+  }));
+
+  // 分片发送
+  const reader = new FileReader();
+  let offset = 0;
+  reader.onload = (e) => {
+    state.fileChannel.send(e.target.result);
+    updateFileItem(fileId, 'sending', { received: offset, total: file.size, startTime: state.fileTransfers[fileId].startTime });
+    offset += e.target.result.byteLength;
+    if (offset < file.size) {
+      readSlice(offset);
+    } else {
+      setTimeout(() => {
+        state.fileChannel.send(JSON.stringify({ type: 'file-done', fileId }));
+        updateFileItem(fileId, 'done');
+        toast('✓ 文件发送完成: ' + file.name, 'success');
+      }, 100);
+    }
+  };
+  reader.onerror = () => toast('文件读取失败', 'error');
+  function readSlice(o) {
+    const slice = file.slice(o, o + FILE_CHUNK_SIZE);
+    reader.readAsArrayBuffer(slice);
+  }
+  readSlice(0);
+}
+
+// 文件 UI
+function renderFileItem(fileId, mode, extra) {
+  let item = document.getElementById('file-' + fileId);
+  if (!item) {
+    const t = state.fileTransfers[fileId];
+    const list = $('fileList');
+    // 清除 "暂无记录"
+    if (list.children.length === 1 && list.children[0].textContent.includes('暂无')) {
+      list.innerHTML = '';
+    }
+    item = document.createElement('div');
+    item.className = 'file-item';
+    item.id = 'file-' + fileId;
+    item.innerHTML = `
+      <div class="file-icon">${mode === 'sending' ? '📤' : '📥'}</div>
+      <div class="file-info">
+        <div class="file-name">${escapeHtml(t.name)}</div>
+        <div class="file-meta">
+          <span class="file-size">${formatSize(t.size)}</span>
+          <span class="file-mode">${mode === 'sending' ? '发送中' : '接收中'}</span>
+          <span class="file-progress">0%</span>
+          <span class="file-speed" style="color:var(--success); font-weight:600;">-</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+      </div>
+      <div class="file-actions" style="display:flex; gap:6px; flex-direction:column; align-items:stretch;">
+        <button class="btn btn-sm btn-primary file-download-btn" style="display:none;">💾 下载</button>
+        <button class="btn btn-sm btn-secondary file-saveas-btn" style="display:none;">另存为</button>
+      </div>
+    `;
+    list.appendChild(item);
+  }
+  if (extra && extra.url) {
+    const t = state.fileTransfers[fileId];
+    const downloadBtn = item.querySelector('.file-download-btn');
+    const saveAsBtn = item.querySelector('.file-saveas-btn');
+    downloadBtn.style.display = 'inline-flex';
+    saveAsBtn.style.display = 'inline-flex';
+    downloadBtn.onclick = () => {
+      const a = document.createElement('a');
+      a.href = extra.url;
+      a.download = t.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast('开始下载: ' + t.name, 'success');
+    };
+    saveAsBtn.onclick = async () => {
+      try {
+        const blob = new Blob(t.chunks, { type: t.mimeType });
+        if (window.showSaveFilePicker) {
+          const handle = await window.showSaveFilePicker({ suggestedName: t.name });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          toast('文件已保存', 'success');
+        } else {
+          // 回退到普通下载
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = t.name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          toast('开始下载: ' + t.name, 'success');
+        }
+      } catch(err) {
+        toast('保存已取消或失败', 'warning');
+      }
+    };
+    item.querySelector('.file-mode').textContent = '完成 ✓';
+  }
+}
+
+function updateFileItem(fileId, mode, info) {
+  const item = document.getElementById('file-' + fileId);
+  if (!item) return;
+  const t = state.fileTransfers[fileId];
+  if (!t) return;
+  if (info && info.received !== undefined && info.total !== undefined) {
+    const pct = (info.received / info.total * 100).toFixed(1);
+    item.querySelector('.progress-fill').style.width = pct + '%';
+    item.querySelector('.file-progress').textContent = pct + '%';
+    if (info.startTime) {
+      const elapsed = (Date.now() - info.startTime) / 1000;
+      if (elapsed > 0.3) {
+        const speed = info.received / elapsed;
+        item.querySelector('.file-speed').textContent = formatSize(speed) + '/s';
+      }
+    }
+  }
+  if (mode === 'done') {
+    item.querySelector('.file-mode').textContent = t.sending ? '发送完成' : '接收完成 ✓';
+    item.querySelector('.progress-fill').style.width = '100%';
+    item.querySelector('.file-progress').textContent = '100%';
+    if (!t.sending) {
+      const downloadBtn = item.querySelector('.file-download-btn');
+      const saveAsBtn = item.querySelector('.file-saveas-btn');
+      if (downloadBtn) downloadBtn.style.display = 'inline-flex';
+      if (saveAsBtn) saveAsBtn.style.display = 'inline-flex';
+    }
+  }
+}
+
+// 文件选择和拖拽
+$('dropZone').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', (e) => {
+  for (const file of e.target.files) sendFile(file);
+  e.target.value = '';
+});
+
+const dz = $('dropZone');
+['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, (e) => {
+  e.preventDefault(); e.stopPropagation(); dz.classList.add('dragover');
+}));
+['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, (e) => {
+  e.preventDefault(); e.stopPropagation(); dz.classList.remove('dragover');
+}));
+dz.addEventListener('drop', (e) => {
+  e.preventDefault();
+  for (const file of e.dataTransfer.files) sendFile(file);
+});
+
+// ==================== 德州扑克 ====================
+const SUITS = ['♠', '♥', '♦', '♣'];
+const RANKS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+const RANK_LABELS = { 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
+const SMALL_BLIND = 10;
+const BIG_BLIND = 20;
+const STARTING_CHIPS = 1000;
+
+function setupPokerChannel(channel) {
+  channel.onopen = () => { console.log('poker channel open'); state.pokerChannel = channel; };
+  channel.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      handlePokerMessage(msg);
+    } catch(err) { console.error(err); }
+  };
+  channel.onclose = () => console.log('poker channel closed');
+}
+
+function handlePokerMessage(msg) {
+  if (msg.type === 'game-start') {
+    receiveGameStart(msg);
+  } else if (msg.type === 'action') {
+    receiveAction(msg);
+  } else if (msg.type === 'game-end') {
+    receiveGameEnd(msg);
+  }
+}
+
+function createDeck() {
+  const deck = [];
+  for (const s of SUITS) for (const r of RANKS) deck.push({ rank: r, suit: s });
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
+function renderCard(card, hidden) {
+  if (hidden) return `<div class="card-poker hidden-card"></div>`;
+  const rankLabel = RANK_LABELS[card.rank] || card.rank;
+  const isRed = card.suit === '♥' || card.suit === '♦';
+  return `<div class="card-poker ${isRed ? 'red' : 'black'}">
+    <div class="card-rank">${rankLabel}</div>
+    <div class="card-suit">${card.suit}</div>
+  </div>`;
+}
+
+function startPokerGame() {
+  if (!state.connected || !state.pokerChannel || state.pokerChannel.readyState !== 'open') {
+    toast('请先建立连接', 'warning'); return;
+  }
+  // 主机端: 发牌
+  const deck = createDeck();
+  const myCards = [deck.pop(), deck.pop()];
+  const oppCards = [deck.pop(), deck.pop()];
+  const community = [deck.pop(), deck.pop(), deck.pop()]; // flop
+
+  state.poker = {
+    deck, community, myCards, oppCards,
+    myChips: STARTING_CHIPS, oppChips: STARTING_CHIPS,
+    pot: SMALL_BLIND + BIG_BLIND,
+    myBet: SMALL_BLIND, oppBet: BIG_BLIND,
+    phase: 'preflop', // preflop, flop, turn, river, showdown
+    currentTurn: 'host', // host is SB in first round - simplified: we alternate
+    myRole: state.role === 'host' ? 'host' : 'guest',
+    currentBet: BIG_BLIND,
+    roundNum: 1,
+    minRaise: BIG_BLIND,
+    myFolded: false, oppFolded: false,
+    myAllIn: false, oppAllIn: false,
+    waitingForOpp: false,
+  };
+  state.poker.myChips -= SMALL_BLIND;
+  state.poker.oppChips -= BIG_BLIND;
+
+  renderPoker();
+  // 通知对方: 发送他的手牌、盲注信息、公共牌
+  sendJSON({
+    type: 'game-start',
+    oppCards: oppCards,
+    community: community,
+    yourChips: STARTING_CHIPS - BIG_BLIND,
+    myChips: STARTING_CHIPS - SMALL_BLIND,
+    pot: SMALL_BLIND + BIG_BLIND,
+    yourBet: BIG_BLIND,
+    myBet: SMALL_BLIND,
+    currentBet: BIG_BLIND,
+    phase: 'preflop',
+    yourTurn: false, // host 先行动, 对方等待
+    roundNum: 1,
+  }, state.pokerChannel);
+
+  // host 先行动
+  enablePokerActions();
+  $('pokerStatus').textContent = '你的回合 (跟注 ' + (BIG_BLIND - SMALL_BLIND) + ')';
+  $('pokerStatus').className = 'poker-status turn';
+}
+
+function receiveGameStart(msg) {
+  state.poker = {
+    myCards: msg.oppCards,
+    oppCards: [], // 对手的牌对方知道, 我们不知道
+    community: msg.community,
+    myChips: msg.yourChips,
+    oppChips: msg.myChips,
+    pot: msg.pot,
+    myBet: msg.yourBet,
+    oppBet: msg.myBet,
+    currentBet: msg.currentBet,
+    phase: msg.phase,
+    currentTurn: msg.yourTurn ? 'me' : 'opp',
+    myRole: 'guest',
+    roundNum: msg.roundNum,
+    myFolded: false, oppFolded: false,
+    myAllIn: false, oppAllIn: false,
+    waitingForOpp: !msg.yourTurn,
+  };
+  $('oppAvatar').textContent = getInitials(state.peerName || '对方');
+  $('oppName').textContent = state.peerName || '对方';
+  renderPoker();
+  if (msg.yourTurn) {
+    enablePokerActions();
+    $('pokerStatus').textContent = '你的回合';
+    $('pokerStatus').className = 'poker-status turn';
+  } else {
+    $('pokerStatus').textContent = '等待对手行动...';
+    $('pokerStatus').className = 'poker-status';
+  }
+}
+
+function enablePokerActions() {
+  $('pokerStartBtn').style.display = 'none';
+  $('pokerActionBtns').style.display = 'flex';
+  $('pokerWaitMsg').style.display = 'none';
+}
+
+function disablePokerActions() {
+  $('pokerActionBtns').style.display = 'none';
+  $('pokerWaitMsg').style.display = 'flex';
+}
+
+function pokerAction(action) {
+  if (!state.poker) return;
+  const p = state.poker;
+  const toCall = Math.max(0, p.currentBet - p.myBet);
+
+  // ALLIN 后自己不能再行动
+  if (p.myAllIn) { toast('你已全下, 无法再行动', 'warning'); return; }
+
+  if (action === 'fold') {
+    p.myFolded = true;
+    sendJSON({ type: 'action', action: 'fold' }, state.pokerChannel);
+    endHandByFold(false); // 自己弃牌 = 对手赢
+    return;
+  }
+
+  if (action === 'check') {
+    if (toCall > 0) { toast('不能过牌, 需要跟注', 'warning'); return; }
+    sendJSON({ type: 'action', action: 'check' }, state.pokerChannel);
+    progressToNextPhase();
+    return;
+  }
+
+  if (action === 'call') {
+    if (toCall === 0) { toast('无需跟注', 'warning'); return; }
+    // 如果筹码不足 toCall, 可以用剩余筹码全下跟注
+    const actualCall = Math.min(toCall, p.myChips);
+    p.myChips -= actualCall;
+    p.myBet += actualCall;
+    p.pot += actualCall;
+    if (p.myChips === 0) {
+      p.myAllIn = true;
+      toast('你以全下方式跟注', 'info', 1500);
+    }
+    sendJSON({ type: 'action', action: 'call', amount: actualCall, allIn: p.myAllIn }, state.pokerChannel);
+    progressToNextPhase();
+    return;
+  }
+
+  if (action === 'raise') {
+    // 对手 ALLIN 后不能再加注
+    if (p.oppAllIn) { toast('对手已全下, 只能跟注或弃牌', 'warning'); return; }
+    const raiseAmt = parseInt($('betAmount').value, 10);
+    if (!raiseAmt || raiseAmt <= 0) { toast('请输入加注金额', 'warning'); return; }
+    const totalBet = toCall + raiseAmt;
+    if (totalBet > p.myChips) { toast('筹码不足, 试试全下', 'warning'); return; }
+    p.myChips -= totalBet;
+    p.myBet += totalBet;
+    p.pot += totalBet;
+    p.currentBet = p.myBet;
+    sendJSON({ type: 'action', action: 'raise', amount: totalBet, bet: raiseAmt }, state.pokerChannel);
+    renderPoker();
+    disablePokerActions();
+    $('pokerStatus').textContent = '你加注 ' + raiseAmt + ', 等待对手回应';
+    $('pokerStatus').className = 'poker-status';
+    return;
+  }
+
+  if (action === 'allin') {
+    const allIn = p.myChips;
+    if (allIn === 0) { toast('没有筹码可全下', 'warning'); return; }
+    p.myChips = 0;
+    p.myAllIn = true;
+    p.myBet += allIn;
+    p.pot += allIn;
+    if (p.myBet > p.currentBet) p.currentBet = p.myBet;
+    sendJSON({ type: 'action', action: 'allin', amount: allIn }, state.pokerChannel);
+    renderPoker();
+    disablePokerActions();
+    // 如果对手也 ALLIN 或对手只需要跟注即可, 直接进入摊牌流程
+    if (p.oppAllIn) {
+      // 双方全下, 直接发完所有公共牌然后摊牌
+      autoShowdownAfterAllIn();
+    } else {
+      $('pokerStatus').textContent = '你 ALL-IN ' + allIn + '! 等待对手回应';
+      $('pokerStatus').className = 'poker-status';
+    }
+    return;
+  }
+}
+
+function autoShowdownAfterAllIn() {
+  // 双方都 ALL-IN, 自动把剩余公共牌发完然后摊牌
+  const p = state.poker;
+  if (p.community.length < 5 && p.deck && p.deck.length > 0) {
+    while (p.community.length < 5 && p.deck.length > 0) {
+      p.community.push(p.deck.pop());
+    }
+  }
+  renderPoker();
+  setTimeout(function() { showdown(); }, 1200);
+}
+
+function receiveAction(msg) {
+  if (!state.poker) return;
+  const p = state.poker;
+
+  if (msg.action === 'fold') {
+    p.oppFolded = true;
+    endHandByFold(true);
+    return;
+  }
+
+  if (msg.action === 'check') {
+    toast('对手过牌', 'info', 1500);
+    progressToNextPhase();
+    return;
+  }
+
+  if (msg.action === 'call') {
+    const amt = msg.amount || 0;
+    p.oppChips -= amt;
+    p.oppBet += amt;
+    p.pot += amt;
+    if (msg.allIn) {
+      p.oppAllIn = true;
+      toast('对手以全下方式跟注', 'info', 1500);
+    } else {
+      toast('对手跟注 ' + amt, 'info', 1500);
+    }
+    // 如果对手也已全下, 进入摊牌流程
+    if (p.myAllIn && p.oppAllIn) {
+      autoShowdownAfterAllIn();
+    } else {
+      progressToNextPhase();
+    }
+    return;
+  }
+
+  if (msg.action === 'raise') {
+    const total = msg.amount || 0;
+    p.oppChips -= total;
+    p.oppBet += total;
+    p.pot += total;
+    p.currentBet = p.oppBet;
+    toast('对手加注!', 'warning', 2000);
+    renderPoker();
+    enablePokerActions();
+    $('pokerStatus').textContent = '对手加注, 需要你回应 (跟注 ' + Math.max(0, p.currentBet - p.myBet) + ')';
+    $('pokerStatus').className = 'poker-status turn';
+    return;
+  }
+
+  if (msg.action === 'allin') {
+    const allIn = msg.amount || 0;
+    p.oppChips = 0;
+    p.oppAllIn = true;
+    p.oppBet += allIn;
+    p.pot += allIn;
+    if (p.oppBet > p.currentBet) p.currentBet = p.oppBet;
+    toast('对手 ALL-IN ' + allIn + '!', 'warning', 2500);
+    renderPoker();
+    // 若我也全下, 直接摊牌
+    if (p.myAllIn) {
+      autoShowdownAfterAllIn();
+    } else {
+      // 否则让我选择跟注(或跟注全下)或弃牌
+      enablePokerActions();
+      const toCall = Math.max(0, p.currentBet - p.myBet);
+      $('pokerStatus').textContent = '对手全下! 需要跟注 ' + toCall + ' 或弃牌 (或全下)';
+      $('pokerStatus').className = 'poker-status turn';
+    }
+    return;
+  }
+}
+
+function progressToNextPhase() {
+  const p = state.poker;
+  p.currentBet = 0;
+  p.myBet = 0;
+  p.oppBet = 0;
+
+  // 如果有玩家已 ALLIN, 进入快速摊牌模式: 直接发完公共牌并摊牌
+  // 例外: 自己 ALLIN 但对手还没回应 - 由对手的回应来推进
+  if (p.myAllIn || p.oppAllIn) {
+    // 双方都无法再行动, 直接发完所有公共牌并摊牌
+    autoShowdownAfterAllIn();
+    return;
+  }
+
+  if (p.phase === 'preflop') {
+    p.phase = 'flop';
+  } else if (p.phase === 'flop') {
+    // 发 turn 牌
+    if (p.deck && p.deck.length > 0) p.community.push(p.deck.pop());
+    p.phase = 'turn';
+  } else if (p.phase === 'turn') {
+    if (p.deck && p.deck.length > 0) p.community.push(p.deck.pop());
+    p.phase = 'river';
+  } else if (p.phase === 'river') {
+    showdown();
+    return;
+  }
+
+  // 如果我是 host, 我先行动 (简化)
+  const isMyTurn = (p.myRole === 'host');
+  renderPoker();
+  if (isMyTurn) {
+    enablePokerActions();
+    $('pokerStatus').textContent = '你的回合 (' + p.phase.toUpperCase() + ')';
+    $('pokerStatus').className = 'poker-status turn';
+  } else {
+    disablePokerActions();
+    $('pokerStatus').textContent = p.phase.toUpperCase() + ' - 等待对手行动';
+    $('pokerStatus').className = 'poker-status';
+  }
+
+  // 通知对手新阶段的公共牌 (如果新增了牌)
+  if (p.deck) {
+    sendJSON({
+      type: 'action',
+      action: 'next-phase',
+      phase: p.phase,
+      community: p.community,
+      yourTurn: !isMyTurn,
+    }, state.pokerChannel);
+  }
+}
+
+function endHandByFold(oppFolded) {
+  const p = state.poker;
+  if (oppFolded) {
+    p.myChips += p.pot;
+    $('pokerStatus').textContent = '对手弃牌, 你赢得底池 ' + p.pot + ' 筹码!';
+  } else {
+    p.oppChips += p.pot;
+    $('pokerStatus').textContent = '你弃牌, 对手赢得底池 ' + p.pot + ' 筹码';
+  }
+  $('pokerStatus').className = 'poker-status win';
+  disablePokerActions();
+  $('pokerStartBtn').style.display = 'flex';
+  $('pokerStartBtn').innerHTML = '<button class="btn btn-success" onclick="startPokerGame()">🎮 下一局</button>';
+  renderPoker();
+  sendJSON({ type: 'game-end', oppFolded: oppFolded, pot: p.pot, myChips: p.myChips, yourChips: p.oppChips }, state.pokerChannel);
+}
+
+function receiveGameEnd(msg) {
+  const p = state.poker;
+  if (!p) return;
+  p.myChips = msg.yourChips;
+  p.oppChips = msg.myChips;
+  if (msg.oppFolded === true) {
+    $('pokerStatus').textContent = '你弃牌, 对手赢得底池';
+  } else if (msg.oppFolded === false) {
+    $('pokerStatus').textContent = '对手弃牌, 你赢得底池!';
+  } else if (msg.showdown) {
+    $('pokerStatus').textContent = '对手: ' + msg.winnerText;
+    if (msg.oppCards) p.oppCards = msg.oppCards;
+  }
+  $('pokerStatus').className = 'poker-status win';
+  disablePokerActions();
+  $('pokerStartBtn').style.display = 'flex';
+  renderPoker();
+}
+
+function showdown() {
+  const p = state.poker;
+  // host 端计算胜负
+  const myHand = evaluateBestHand([...p.myCards, ...p.community]);
+  const oppHand = evaluateBestHand([...p.oppCards, ...p.community]);
+  let winnerText;
+  if (myHand.rank > oppHand.rank || (myHand.rank === oppHand.rank && myHand.tiebreak > oppHand.tiebreak)) {
+    p.myChips += p.pot;
+    winnerText = '你赢得底池 ' + p.pot + ' 筹码! (' + myHand.name + ')';
+  } else if (oppHand.rank > myHand.rank || (myHand.rank === oppHand.rank && oppHand.tiebreak > myHand.tiebreak)) {
+    p.oppChips += p.pot;
+    winnerText = '对手赢得底池 (' + oppHand.name + ')';
+  } else {
+    p.myChips += p.pot / 2;
+    p.oppChips += p.pot / 2;
+    winnerText = '平分底池!';
+  }
+  $('pokerStatus').textContent = winnerText;
+  $('pokerStatus').className = 'poker-status win';
+  disablePokerActions();
+  $('pokerStartBtn').style.display = 'flex';
+  $('pokerStartBtn').innerHTML = '<button class="btn btn-success" onclick="startPokerGame()">🎮 下一局</button>';
+  renderPoker(true);
+  sendJSON({
+    type: 'game-end',
+    showdown: true,
+    oppCards: p.oppCards,
+    winnerText: winnerText,
+    myChips: p.oppChips,
+    yourChips: p.myChips,
+  }, state.pokerChannel);
+}
+
+function renderPoker(showdown) {
+  const p = state.poker;
+  if (!p) return;
+
+  // 自己的座位：筹码和标记
+  const meChipsText = '筹码: ' + p.myChips + (p.myAllIn ? ' (ALL-IN)' : '');
+  $('meChips').textContent = meChipsText;
+  const oppChipsText = '筹码: ' + p.oppChips + (p.oppAllIn ? ' (ALL-IN)' : '');
+  $('oppChips').textContent = oppChipsText;
+
+  $('potAmount').textContent = p.pot;
+  $('meBet').textContent = '下注: ' + p.myBet;
+  $('oppBet').textContent = '下注: ' + p.oppBet;
+  $('roundNum').textContent = p.roundNum;
+
+  // 座位样式
+  const meSeat = $('seat-me');
+  const oppSeat = $('seat-opponent');
+  if (meSeat) {
+    meSeat.classList.toggle('folded', p.myFolded);
+  }
+  if (oppSeat) {
+    oppSeat.classList.toggle('folded', p.oppFolded);
+  }
+
+  // 自己的手牌
+  $('meCards').innerHTML = p.myCards.map(c => renderCard(c)).join('');
+
+  // 对手的手牌 (showdown 时展示)
+  if (showdown && p.oppCards && p.oppCards.length) {
+    $('oppCards').innerHTML = p.oppCards.map(c => renderCard(c)).join('');
+  } else if (p.oppCards && p.oppCards.length && p.myRole === 'host' && showdown) {
+    $('oppCards').innerHTML = p.oppCards.map(c => renderCard(c)).join('');
+  } else {
+    $('oppCards').innerHTML = [1,2].map(() => `<div class="card-poker hidden-card"></div>`).join('');
+  }
+
+  // 公共牌
+  if (p.community) {
+    $('communityCards').innerHTML = p.community.map(c => renderCard(c)).join('');
+  }
+
+  // 牌型展示
+  const bestHand = evaluateBestHand([...p.myCards, ...(p.community || [])]);
+  $('handRank').textContent = bestHand.name;
+}
+
+// 牌型评估: 返回 {rank(0-9), name, tiebreak}
+function evaluateBestHand(cards) {
+  // 穷举所有 5 张组合
+  const combos = combinations(cards, 5);
+  let best = { rank: -1, name: '高牌', tiebreak: 0 };
+  for (const combo of combos) {
+    const eval0 = evaluateFive(combo);
+    if (eval0.rank > best.rank || (eval0.rank === best.rank && eval0.tiebreak > best.tiebreak)) {
+      best = eval0;
+    }
+  }
+  return best;
+}
+
+function combinations(arr, k) {
+  const result = [];
+  function helper(start, combo) {
+    if (combo.length === k) { result.push([...combo]); return; }
+    for (let i = start; i < arr.length; i++) {
+      combo.push(arr[i]);
+      helper(i + 1, combo);
+      combo.pop();
+    }
+  }
+  helper(0, []);
+  return result;
+}
+
+function evaluateFive(cards) {
+  const ranks = cards.map(c => c.rank).sort((a,b)=>b-a);
+  const suits = cards.map(c => c.suit);
+  const uniqRanks = [...new Set(ranks)];
+  const uniqSuits = [...new Set(suits)];
+
+  const isFlush = uniqSuits.length === 1;
+  const isStraight = (() => {
+    const sorted = [...uniqRanks].sort((a,b)=>a-b);
+    if (sorted.length !== 5) return false;
+    if (sorted[4] - sorted[0] === 4) return true;
+    // A-2-3-4-5
+    if (sorted[0] === 2 && sorted[1] === 3 && sorted[2] === 4 && sorted[3] === 5 && sorted[4] === 14) return true;
+    return false;
+  })();
+  const straightHigh = (() => {
+    const sorted = [...uniqRanks].sort((a,b)=>a-b);
+    if (sorted[0] === 2 && sorted[1] === 3 && sorted[2] === 4 && sorted[3] === 5 && sorted[4] === 14) return 5;
+    return sorted[4];
+  })();
+
+  // 统计点数分布
+  const countMap = {};
+  for (const r of ranks) countMap[r] = (countMap[r] || 0) + 1;
+  const counts = Object.values(countMap).sort((a,b)=>b-a);
+
+  // 同花顺
+  if (isStraight && isFlush) return { rank: 8, name: '同花顺', tiebreak: straightHigh };
+  // 四条
+  if (counts[0] === 4) return { rank: 7, name: '四条', tiebreak: ranks[0] };
+  // 葫芦 (三带二)
+  if (counts[0] === 3 && counts[1] === 2) return { rank: 6, name: '葫芦', tiebreak: ranks[0] };
+  // 同花
+  if (isFlush) return { rank: 5, name: '同花', tiebreak: ranks[0] };
+  // 顺子
+  if (isStraight) return { rank: 4, name: '顺子', tiebreak: straightHigh };
+  // 三条
+  if (counts[0] === 3) return { rank: 3, name: '三条', tiebreak: ranks[0] };
+  // 两对
+  if (counts[0] === 2 && counts[1] === 2) return { rank: 2, name: '两对', tiebreak: ranks[0] };
+  // 对子
+  if (counts[0] === 2) return { rank: 1, name: '对子', tiebreak: ranks[0] };
+  // 高牌
+  return { rank: 0, name: '高牌', tiebreak: ranks[0] };
+}
+
+// 处理 "next-phase" 消息 (在 receiveAction 中)
+const origReceiveAction = handlePokerMessage;
+// 额外处理 next-phase: 监听收到的 action=next-phase
+(function patchActionHandler() {
+  const original = handlePokerMessage;
+  handlePokerMessage = function(msg) {
+    if (msg.type === 'action' && msg.action === 'next-phase') {
+      if (!state.poker) return;
+      const p = state.poker;
+      p.phase = msg.phase;
+      p.community = msg.community;
+      p.currentBet = 0;
+      p.myBet = 0;
+      p.oppBet = 0;
+      renderPoker();
+      if (msg.yourTurn) {
+        enablePokerActions();
+        $('pokerStatus').textContent = '你的回合 (' + p.phase.toUpperCase() + ')';
+        $('pokerStatus').className = 'poker-status turn';
+      } else {
+        disablePokerActions();
+        $('pokerStatus').textContent = p.phase.toUpperCase() + ' - 等待对手行动';
+        $('pokerStatus').className = 'poker-status';
+      }
+      return;
+    }
+    original(msg);
+  };
+})();
+
+// ==================== 初始化 ====================
+initName();
+setStatus('未连接', '');
+updatePeerList();
+</script>
+</body>
+</html>
+
